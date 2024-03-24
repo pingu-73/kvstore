@@ -4,19 +4,22 @@ fn main() {
     let mut arguments = std::env::args().skip(1);
     let key = arguments.next().expect("Key wasn't there");
     let value = arguments.next().unwrap();
-    print!("{} {}", key, value);
+    println!("{} {}", key, value);
     // let contents = format!("{}\t{}\n", key, value); 
     // std::fs::write("kv.db", contents).unwrap();
 
     let mut database = Database::new().expect("creating db failed");
     database.insert(key.to_uppercase(), value.clone());
     database.insert(key, value);
-    
-    database.flush().unwrap();
+    match database.flush() {
+        Ok(()) => println!("✓"),
+        Err(e) => println!("𐄂 {}", e),
+    } 
 }
 
 struct Database {
     map: HashMap<String, String>,
+    flush: bool,
 }
 
 impl Database {
@@ -39,20 +42,35 @@ impl Database {
         // read the kv.db file 
         // parse the string
         // populate our map
-        Ok(Database { map: map })
+        Ok(Database { map, flush: false })
     }
 
     fn insert(& mut self, key: String ,value: String) {
         self.map.insert(key, value);
     }
 
-    #[allow(dead_code)]
-    fn flush(self) -> std::io::Result<()> {  // this is a type alias for Result<(), std::io::Error>
-        let mut contents = String::new();
-        for pairs in self.map {
-            let kvpair = format!("{}\t{}\n", pairs.0, pairs.1);
-            contents.push_str(&kvpair);
+    fn flush (mut self) -> std::io::Result<()> {
+        self.flush = true;
+        do_flush(&self)
+    }
+}
+
+impl Drop for Database {
+    fn drop(&mut self) {
+        if !self.flush {
+            let _ = do_flush(self);
+        }
+    }
+}
+
+fn do_flush(database: &Database) -> std::io::Result<()> {
+    // println!("called flush");
+    let mut contents = String::new();
+        for pairs in &database.map {
+            contents.push_str(&pairs.0);
+            contents.push('\t');
+            contents.push_str(&pairs.1);
+            contents.push('\n');
         }
         std::fs::write("kv.db", contents)
-    }
 }
